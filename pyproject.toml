@@ -1,5 +1,6 @@
 [project]
-name = "exam_bundle"
+name = "NYC-DATABRICKS
+Public"
 version = "0.0.1"
 authors = [{ name = "hamzabouali222@gmail.com" }]
 requires-python = ">=3.10,<3.13"
@@ -21,7 +22,8 @@ dev = [
 ]
 
 [project.scripts]
-main = "exam_bundle.main:main"
+main = "NYC-DATABRICKS
+Public.main:main"
 
 [build-system]
 requires = ["hatchling"]

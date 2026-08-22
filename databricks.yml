@@ -1,7 +1,9 @@
-# This is a Declarative Automation Bundle definition for exam_bundle.
+# This is a Declarative Automation Bundle definition for NYC-DATABRICKS
+Public.
 # See https://docs.databricks.com/dev-tools/bundles/index.html for documentation.
 bundle:
-  name: exam_bundle
+  name: NYC-DATABRICKS
+Public
   uuid: c3768229-1f64-430f-b2b1-58bcf8d5a95b
 
 include:
