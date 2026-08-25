@@ -1,9 +1,9 @@
 # This is a Declarative Automation Bundle definition for NYC-DATABRICKS
-Public.
+
 # See https://docs.databricks.com/dev-tools/bundles/index.html for documentation.
 bundle:
   name: NYC-DATABRICKS
-Public
+
   uuid: c3768229-1f64-430f-b2b1-58bcf8d5a95b
 
 include:
@@ -15,6 +15,17 @@ variables:
     description: The catalog to use
   schema:
     description: The schema to use
+  day:
+    description: "The processing day"
+  month:
+    description: "The processing month"
+  year:
+    description: "The processing year"
+  base_url:
+    description: "Source URL for data collection"
+  raw_path:
+    description: "Workspace landing zone path"
+  
 
 targets:
   dev:
@@ -29,6 +40,7 @@ targets:
     variables:
       catalog: workspace
       schema: ${workspace.current_user.short_name}
+
   prod:
     mode: production
     workspace:

@@ -1,8 +1,0 @@
-resources:
-  jobs:
-    hello_job:
-      name: hello-job
-      tasks:
-        - task_key: hello_task
-          notebook_task:  
-            notebook_path: ../src/notebook.ipynb

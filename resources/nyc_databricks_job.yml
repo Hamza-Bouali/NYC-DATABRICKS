@@ -1,0 +1,43 @@
+resources:
+  jobs:
+    download_files:
+      name: get_raw_data
+      tasks:
+        - task_key: check_file
+          notebook_task:  
+            notebook_path: ../src/download_files/check_existence.ipynb
+        - task_key: branching
+          condition_task: 
+            op: EQUAL_TO
+            left: '{{ tasks.check_file.values.does_file_exist }}'
+            right: 'true'
+          depends_on:
+            - task_key: check_file
+        - task_key: download_parquet_file
+          depends_on:
+            - task_key: branching
+              outcome: 'false'
+          notebook_task:
+            notebook_path: ../src/download_files/download_file.ipynb
+      parameters:
+        - name: month
+          default: ${var.month}
+        - name: year
+          default: ${var.year}
+        - name: base_url
+          default: ${var.base_url}
+        - name: raw_path
+          default: ${var.raw_path}
+    etl_job:
+      name: etl_job
+      trigger:
+        pause_status: "UNPAUSED" 
+        file_arrival:
+          url: "/Volumes/nyc_taxi/bronze/raw_data/" # Chemin UC ou Cloud Storage
+      tasks:
+        - task_key: collect_file
+          notebook_task:
+            notebook_path: ../src/nyc_etl/ingestion.ipynb
+      
+
+
