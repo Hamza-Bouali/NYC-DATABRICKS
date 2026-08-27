@@ -31,13 +31,28 @@ resources:
     etl_job:
       name: etl_job
       trigger:
-        pause_status: "UNPAUSED" 
+        pause_status: "UNPAUSED"
         file_arrival:
           url: "/Volumes/nyc_taxi/bronze/raw_data/" # Chemin UC ou Cloud Storage
       tasks:
+        - task_key: setup
+          notebook_task:
+            notebook_path: ../src/init.ipynb
         - task_key: collect_file
           notebook_task:
-            notebook_path: ../src/nyc_etl/ingestion.ipynb
-      
+            notebook_path: ../src/nyc_bronze/ingestion.ipynb
+          depends_on: 
+            - task_key: setup
+        - task_key: test_ingestion
+          depends_on: 
+            - task_key: collect_file
+          notebook_task:
+            notebook_path: ../src/nyc_bronze/ingestion_test.ipynb
+        - task_key: qurantine_invalid_total_amounts
+          notebook_task:
+            notebook_path: ../src/nyc_silver/quarantine.ipynb
+          depends_on: 
+            - task_key: collect_file
+        
 
 
