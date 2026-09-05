@@ -50,9 +50,18 @@ resources:
             notebook_path: ../src/nyc_bronze/ingestion_test.ipynb
         - task_key: qurantine_invalid_total_amounts
           notebook_task:
-            notebook_path: ../src/nyc_silver/quarantine.ipynb
+            notebook_path: ../src/nyc_silver/quarantine_duplicates_id.ipynb
           depends_on: 
             - task_key: collect_file
-        
+        - task_key: qurantine_zero_miles
+          notebook_task:
+            notebook_path: ../src/nyc_silver/zero_miles.ipynb
+          depends_on: 
+            - task_key: collect_file
+        - task_key: bronze_to_silver_transformation
+          notebook_task: 
+            notebook_path: ../src/nyc_silver/transform.ipynb
+          depends_on:
+            - task_key: collect_file
 
 
