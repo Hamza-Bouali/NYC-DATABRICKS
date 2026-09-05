@@ -1,4 +1,4 @@
-CREATE OR REPLACE VIEW nyc_taxi.gold.gold_trip_summary
+CREATE OR REPLACE VIEW nyc_taxi.gold.trip_summary
 AS
 SELECT
   -- Date dimension keys
@@ -74,9 +74,9 @@ SELECT
   s.anomaly_flag
 
 FROM nyc_taxi.silver.green_taxi s
-LEFT JOIN nyc_taxi.gold.gold_dim_date d
+LEFT JOIN nyc_taxi.gold.dim_date d
   ON DATE(s.pickup_datetime) = d.date_key
-LEFT JOIN nyc_taxi.gold.gold_dim_zone pu
+LEFT JOIN nyc_taxi.gold.dim_zone pu
   ON s.PULocationID = pu.zone_key
-LEFT JOIN nyc_taxi.gold.gold_dim_zone do
+LEFT JOIN nyc_taxi.gold.dim_zone do
   ON s.DOLocationID = do.zone_key;

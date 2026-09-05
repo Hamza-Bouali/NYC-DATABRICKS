@@ -17,14 +17,19 @@ variables:
     description: The schema to use
   day:
     description: "The processing day"
+    default: "01"
   month:
     description: "The processing month"
+    default: "01"
   year:
     description: "The processing year"
+    default: "2020"
   base_url:
     description: "Source URL for data collection"
+    default: "https://d37ci6vzurychx.cloudfront.net/trip-data/"
   raw_path:
     description: "Workspace landing zone path"
+    default: "/Volumes/nyc_taxi/bronze/raw_data"
   
 
 targets:

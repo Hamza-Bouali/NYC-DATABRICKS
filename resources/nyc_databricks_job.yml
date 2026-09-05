@@ -48,12 +48,12 @@ resources:
             - task_key: collect_file
           notebook_task:
             notebook_path: ../src/nyc_bronze/ingestion_test.ipynb
-        - task_key: qurantine_invalid_total_amounts
+        - task_key: quarantine_duplicate_ids
           notebook_task:
             notebook_path: ../src/nyc_silver/quarantine_duplicates_id.ipynb
           depends_on: 
             - task_key: collect_file
-        - task_key: qurantine_zero_miles
+        - task_key: quarantine_zero_miles
           notebook_task:
             notebook_path: ../src/nyc_silver/zero_miles.ipynb
           depends_on: 
@@ -63,24 +63,37 @@ resources:
             notebook_path: ../src/nyc_silver/transform.ipynb
           depends_on:
             - task_key: collect_file
+            - task_key: quarantine_duplicate_ids
+            - task_key: quarantine_zero_miles
+
         - task_key: dim_zone
+          depends_on: 
+            - task_key: bronze_to_silver_transformation
           sql_task: 
             warehouse_id: b253792144566b85
             file: 
               path: ../src/nyc_gold/queries/gold_dim_zone.sql
         - task_key: daily_borough
+          depends_on: 
+            - task_key: trip_summary
           sql_task:
             warehouse_id: b253792144566b85
             file: 
               path: ../src/nyc_gold/queries/gold_daily_borough_metrics.sql
 
         - task_key: dim_date
+          depends_on: 
+            - task_key: bronze_to_silver_transformation
           sql_task:
             warehouse_id: b253792144566b85
             file: 
               path: ../src/nyc_gold/queries/gold_dim_date.sql
         
         - task_key: trip_summary
+          depends_on: 
+            - task_key: bronze_to_silver_transformation
+            - task_key: dim_zone
+            - task_key: dim_date
           sql_task:
             warehouse_id: b253792144566b85
             file: 

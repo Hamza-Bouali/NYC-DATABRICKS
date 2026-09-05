@@ -1,4 +1,4 @@
-CREATE OR REPLACE TABLE nyc_taxi.bronze.gold_dim_zone
+CREATE OR REPLACE TABLE nyc_taxi.gold.dim_zone
 AS
 SELECT
   LocationID AS zone_key,
@@ -21,6 +21,6 @@ SELECT
   END AS zone_type,
   -- Flag for common analyst filters
   CASE WHEN Borough = 'Manhattan' THEN TRUE ELSE FALSE END AS is_manhattan
-FROM nyc_taxi.bronze.bronze_zones;
+FROM nyc_taxi.bronze.zone_lookup;
 
-OPTIMIZE nyc_taxi.bronze.gold_dim_zone ZORDER BY (zone_key);
+OPTIMIZE nyc_taxi.gold.dim_zone ZORDER BY (zone_key);

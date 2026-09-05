@@ -1,4 +1,4 @@
-CREATE MATERIALIZED VIEW nyc_taxi.gold.daily_borough_metrics
+CREATE OR REFRESH MATERIALIZED VIEW nyc_taxi.gold.daily_borough_metrics
 AS
 SELECT
   trip_date,

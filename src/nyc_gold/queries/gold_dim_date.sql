@@ -1,4 +1,4 @@
-CREATE OR REPLACE TABLE nyc_taxi.bronze.gold_dim_date
+CREATE OR REPLACE TABLE nyc_taxi.gold.dim_date
 AS
 WITH date_range AS (
   SELECT explode(sequence(DATE('2020-01-01'), DATE('2026-12-31'), INTERVAL 1 DAY)) AS calendar_date
