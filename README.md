@@ -1,7 +1,7 @@
 # NYC Taxi Operations Intelligence Platform
 
 This project is a Databricks migration of an on-premises NYC Taxi analytics
-platform. It turns NYC Taxi and Limousine Commission trip records into governed
+platform ( YG-PIPELINE ). It turns NYC Taxi and Limousine Commission trip records into governed
 data products for fleet operations, finance, compliance, and strategic planning.
 
 ## Executive Summary
