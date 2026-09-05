@@ -28,6 +28,25 @@ resources:
           default: ${var.base_url}
         - name: raw_path
           default: ${var.raw_path}
+    backfill_download:
+      name: backfill_download
+      tasks:
+        
+
+        - task_key: year_loop
+          for_each_task:
+            inputs: '["01", "02", "03", "04", "05", "06", "07", "08", "09","10","11","12"]'
+            task: 
+              task_key: run_job
+              run_job_task: 
+                job_id: ${resources.jobs.download_files.id}
+                job_parameters:
+                  month: "${input.month}"
+                  year : "${input.year}"
+                  raw_path: "${input.raw_path}"
+            
+
+      
     etl_job:
       name: etl_job
       trigger:
