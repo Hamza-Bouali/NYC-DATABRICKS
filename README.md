@@ -107,15 +107,170 @@ tables in Unity Catalog:
 - `nyc_taxi.gold`: dimensions, trip summaries, and reporting metrics
 - `nyc_taxi.quarantine`: duplicate and zero-distance records retained for review
 
+## Architecture Views
+
+### Platform Architecture
+
+```mermaid
+flowchart LR
+  Sources["TLC Green Taxi files\nZone lookup files"] --> Volume["Unity Catalog Volume\nnyc_taxi.bronze.raw_data"]
+  Volume --> AutoLoader["Auto Loader\nfile-arrival ingestion"]
+  AutoLoader --> Bronze["Bronze Delta\nnyc_taxi.bronze"]
+  Bronze --> Spark["Databricks Spark\ncleansing and enrichment"]
+  Spark --> Silver["Silver Delta\nnyc_taxi.silver"]
+  Spark --> Quarantine["Quarantine tables\nnyc_taxi.quarantine"]
+  Silver --> SQL["Databricks SQL Warehouse\nGold transformations"]
+  SQL --> Gold["Gold views and tables\nnyc_taxi.gold"]
+  Gold --> Reports["Borough metrics\nBI and dashboards"]
+  Catalog["Unity Catalog\naccess, lineage, discovery"] -. governs .-> Bronze
+  Catalog -. governs .-> Silver
+  Catalog -. governs .-> Gold
+  Catalog -. governs .-> Registry
+```
+
+### Medallion Data Flow
+
+```mermaid
+flowchart TD
+  A["Download one period\nor run full backfill"] --> B["Raw Parquet in Volume"]
+  B --> C["Bronze: preserve source records"]
+  C --> D{"Data-quality checks"}
+  D -->|"Duplicate business key"| Q1["Quarantine duplicates"]
+  D -->|"Zero distance"| Q2["Quarantine zero-mile trips"]
+  D -->|"Valid analytical trip"| E["Silver: standardized and enriched"]
+  E --> F["Gold dimensions"]
+  E --> G["Gold trip summary"]
+  F --> G
+  G --> H["Daily borough metrics"]
+```
+
+### Job Orchestration
+
+```mermaid
+flowchart TD
+  Download["download_files\ncheck and download one period"] --> Backfill["backfill_download\n84 month/year child runs"]
+  Download --> File["Files in raw_data Volume"]
+  File --> Setup["etl_job: setup\ncreate catalog schemas"]
+  Setup --> Ingest["collect_file\nAuto Loader availableNow"]
+  Ingest --> Test["test_ingestion\nsource/schema validation"]
+  Ingest --> Dupes["quarantine_duplicate_ids"]
+  Ingest --> Zero["quarantine_zero_miles"]
+  Test --> Silver["bronze_to_silver_transformation"]
+  Dupes --> Silver
+  Zero --> Silver
+  Silver --> Zone["dim_zone"]
+  Silver --> Date["dim_date"]
+  Zone --> Summary["trip_summary"]
+  Date --> Summary
+  Silver --> Summary
+  Summary --> Borough["daily_borough"]
+```
+
+The current implementation includes the ingestion, medallion, and orchestration
+paths shown above. Hourly dispatch recommendations,
+dashboard delivery, and FHV competitive intelligence are planned extensions.
+
+## Data Schemas and Contracts
+
+All data objects use the `nyc_taxi` Unity Catalog. The `init.ipynb` notebook
+creates the `bronze`, `silver`, `gold`, and `quarantine` schemas and the
+`bronze.raw_data` Volume.
+
+### Bronze Schema
+
+| Object | Type | Purpose |
+| --- | --- | --- |
+| `nyc_taxi.bronze.raw_data` | Volume | Landing area for downloaded Parquet files and Auto Loader checkpoints |
+| `nyc_taxi.bronze.green_taxi` | Delta table | Raw Green Taxi trip records ingested by Auto Loader |
+| `nyc_taxi.bronze.zone_lookup` | Delta table | TLC location reference data used to resolve zone IDs |
+
+The Green Taxi source contains the TLC fields used by the pipeline, including
+`VendorID`, `lpep_pickup_datetime`, `lpep_dropoff_datetime`, `store_and_fwd_flag`,
+`RatecodeID`, `PULocationID`, `DOLocationID`, `passenger_count`, `trip_distance`,
+`fare_amount`, `extra`, `mta_tax`, `tip_amount`, `tolls_amount`,
+`improvement_surcharge`, `total_amount`, `payment_type`, and `trip_type`, plus
+the source coordinate fields when present.
+
+### Silver Schema
+
+`nyc_taxi.silver.green_taxi` is the cleaned and enriched trip contract. Its
+published columns are:
+
+| Column group | Columns |
+| --- | --- |
+| Identity and timestamps | `trip_id`, `vendor_id`, `pickup_datetime`, `dropoff_datetime` |
+| Trip measures | `trip_duration_minutes`, `trip_distance`, `fare_per_mile`, `passenger_count` |
+| Locations | `PULocationID`, `DOLocationID` |
+| Payment and fare | `rate_code_id`, `payment_type`, `tip_amount`, `tip_percentage`, `fare_amount`, `extra`, `mta_tax`, `improvement_surcharge`, `tolls_amount`, `total_amount` |
+| Source attributes | `store_and_fwd_flag`, `trip_type` |
+| Time features | `pickup_hour`, `pickup_day_of_week` |
+| Quality | `anomaly_flag` |
+
+Silver rules remove invalid timestamps, negative monetary values, zero-distance
+trips, trips longer than 24 hours, and repeated `trip_id` business keys from
+the analytical table. Removed records remain available in quarantine.
+
+### Gold Schema
+
+#### `nyc_taxi.gold.dim_zone`
+
+The zone dimension is built from `bronze.zone_lookup`:
+
+`zone_key`, `borough`, `zone_name`, `region_group`, `zone_type`, `is_manhattan`
+
+#### `nyc_taxi.gold.dim_date`
+
+The date dimension covers 2020 through 2026 and contains:
+
+`date_key`, `year`, `month`, `month_of_year`, `month_name`, `day_of_month`,
+`day_of_week`, `day_name`, `is_weekend`, `week_of_year`, `quarter`,
+`quarter_year`, `is_us_holiday`
+
+#### `nyc_taxi.gold.trip_summary`
+
+This view joins Silver trips to both dimensions. It publishes date attributes,
+time-of-day classification, pickup and dropoff zone attributes, trip measures,
+payment labels, rate labels, and anomaly status:
+
+`trip_date`, `year`, `month`, `month_name`, `day_of_week`, `day_name`,
+`is_weekend`, `quarter`, `is_us_holiday`, `pickup_hour`, `time_of_day`,
+`pickup_zone_key`, `pickup_borough`, `pickup_zone`, `pickup_region_group`,
+`pickup_zone_type`, `pickup_is_manhattan`, `dropoff_zone_key`, `dropoff_borough`,
+`dropoff_zone`, `dropoff_region_group`, `trip_duration_minutes`, `trip_distance`,
+`passenger_count`, `fare_amount`, `extra`, `mta_tax`, `improvement_surcharge`,
+`tip_amount`, `tolls_amount`, `total_amount`, `fare_per_mile`, `tip_percentage`,
+`payment_type`, `payment_type_name`, `rate_code_id`, `rate_type_name`,
+`anomaly_flag`
+
+#### `nyc_taxi.gold.daily_borough_metrics`
+
+This materialized view aggregates the trip summary by date and pickup borough:
+
+`trip_date`, `borough`, `total_trips`, `total_fare_revenue`, `total_tip_revenue`,
+`total_revenue`, `avg_tip_pct`, `avg_duration_min`, `avg_distance_mi`,
+`zones_with_pickups`, `revenue_per_trip`, `anomaly_count`
+
+### Quarantine Schema
+
+Quarantine tables preserve records for investigation instead of silently
+discarding them:
+
+- `nyc_taxi.quarantine.taxi_trips_duplicates_latest` contains all rows sharing
+  the duplicate business key and includes the derived `trip_id`.
+- `nyc_taxi.quarantine.taxi_zero_miles_latest` contains Bronze rows where
+  `trip_distance = 0`.
+- Timestamped copies are also written for each run, using names such as
+  `taxi_trips_duplicates_<timestamp>` and `taxi_zero_miles_<timestamp>`.
+
 ## Migration From On-Premises
 
-| Previous platform                  | Databricks implementation                                                     |
-| ---------------------------------- | ----------------------------------------------------------------------------- |
-| ClickHouse analytical tables       | Delta tables governed by Unity Catalog                                        |
-| Apache Spark jobs                  | Databricks Spark notebooks and SQL tasks                                      |
-| Docker-based execution             | Databricks-managed job compute and SQL Warehouses                             |
-| Terraform infrastructure           | Databricks Asset Bundle configuration in`databricks.yml` and `resources/` |
-| Manually managed medallion storage | Unity Catalog schemas and Delta Lake                                          |
+| Previous platform | Databricks implementation |
+| --- | --- |
+| ClickHouse analytical tables | Delta tables governed by Unity Catalog |
+| Apache Spark jobs | Databricks Spark notebooks and SQL tasks |
+| Docker-based execution | Databricks-managed job compute and SQL Warehouses |
+| Terraform infrastructure | Databricks Asset Bundle configuration in `databricks.yml` and `resources/` |
+| Manually managed medallion storage | Unity Catalog schemas and Delta Lake |
 
 The migration preserves the original business purpose while consolidating
 execution, orchestration, storage, governance, and deployment on Databricks.
@@ -193,4 +348,60 @@ The production target is available through the same bundle workflow:
 
 ```bash
 databricks bundle deploy -t prod
+```
+
+## User Guide: Download and Backfill Data
+
+The project exposes two download workflows:
+
+- `backfill_download` downloads every month from 2020 through 2026. It runs
+  one child download job for each month/year combination.
+- `download_files` downloads one specific month and year. The job checks the
+  Volume first and skips the download when the file is already present.
+
+### Run the Complete Backfill
+
+After deployment, run the full 84-period backfill:
+
+```bash
+databricks bundle run backfill_download -t dev
+```
+
+The backfill uses the configured source URL and Volume path from `databricks.yml`.
+Auto Loader processes newly downloaded files when `etl_job` runs.
+
+### Download One Month and Year
+
+Pass both values as job parameters. Months must use two digits:
+
+```bash
+databricks bundle run download_files -t dev \
+  --params "month=11,year=2021"
+```
+
+The default `base_url` and `raw_path` values are used automatically. To override
+them, include all parameters in the same comma-separated argument:
+
+```bash
+databricks bundle run download_files -t dev \
+  --params "month=11,year=2021,base_url=https://d37ci6vzurychx.cloudfront.net/trip-data/,raw_path=/Volumes/nyc_taxi/bronze/raw_data"
+```
+
+### Download Every Month for One Year
+
+To process all twelve months for a selected year, run the single-period job in
+a Bash loop. This is useful when you do not want to launch the complete
+2020–2026 backfill:
+
+```bash
+for month in {01..12}; do
+  databricks bundle run download_files -t dev \
+    --params "month=${month},year=2021"
+done
+```
+
+After downloading data, run the ETL job to ingest and transform it:
+
+```bash
+databricks bundle run etl_job -t dev
 ```

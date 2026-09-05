@@ -31,22 +31,29 @@ resources:
     backfill_download:
       name: backfill_download
       tasks:
-        
-
         - task_key: year_loop
           for_each_task:
-            inputs: '["01", "02", "03", "04", "05", "06", "07", "08", "09","10","11","12"]'
-            task: 
+            # One input object represents one month/year download.
+            inputs: >-
+              [
+                {"month":"01","year":"2020"},{"month":"02","year":"2020"},{"month":"03","year":"2020"},{"month":"04","year":"2020"},{"month":"05","year":"2020"},{"month":"06","year":"2020"},{"month":"07","year":"2020"},{"month":"08","year":"2020"},{"month":"09","year":"2020"},{"month":"10","year":"2020"},{"month":"11","year":"2020"},{"month":"12","year":"2020"},
+                {"month":"01","year":"2021"},{"month":"02","year":"2021"},{"month":"03","year":"2021"},{"month":"04","year":"2021"},{"month":"05","year":"2021"},{"month":"06","year":"2021"},{"month":"07","year":"2021"},{"month":"08","year":"2021"},{"month":"09","year":"2021"},{"month":"10","year":"2021"},{"month":"11","year":"2021"},{"month":"12","year":"2021"},
+                {"month":"01","year":"2022"},{"month":"02","year":"2022"},{"month":"03","year":"2022"},{"month":"04","year":"2022"},{"month":"05","year":"2022"},{"month":"06","year":"2022"},{"month":"07","year":"2022"},{"month":"08","year":"2022"},{"month":"09","year":"2022"},{"month":"10","year":"2022"},{"month":"11","year":"2022"},{"month":"12","year":"2022"},
+                {"month":"01","year":"2023"},{"month":"02","year":"2023"},{"month":"03","year":"2023"},{"month":"04","year":"2023"},{"month":"05","year":"2023"},{"month":"06","year":"2023"},{"month":"07","year":"2023"},{"month":"08","year":"2023"},{"month":"09","year":"2023"},{"month":"10","year":"2023"},{"month":"11","year":"2023"},{"month":"12","year":"2023"},
+                {"month":"01","year":"2024"},{"month":"02","year":"2024"},{"month":"03","year":"2024"},{"month":"04","year":"2024"},{"month":"05","year":"2024"},{"month":"06","year":"2024"},{"month":"07","year":"2024"},{"month":"08","year":"2024"},{"month":"09","year":"2024"},{"month":"10","year":"2024"},{"month":"11","year":"2024"},{"month":"12","year":"2024"},
+                {"month":"01","year":"2025"},{"month":"02","year":"2025"},{"month":"03","year":"2025"},{"month":"04","year":"2025"},{"month":"05","year":"2025"},{"month":"06","year":"2025"},{"month":"07","year":"2025"},{"month":"08","year":"2025"},{"month":"09","year":"2025"},{"month":"10","year":"2025"},{"month":"11","year":"2025"},{"month":"12","year":"2025"},
+                {"month":"01","year":"2026"},{"month":"02","year":"2026"},{"month":"03","year":"2026"},{"month":"04","year":"2026"},{"month":"05","year":"2026"},{"month":"06","year":"2026"},{"month":"07","year":"2026"},{"month":"08","year":"2026"},{"month":"09","year":"2026"},{"month":"10","year":"2026"},{"month":"11","year":"2026"},{"month":"12","year":"2026"}
+              ]
+            task:
               task_key: run_job
-              run_job_task: 
+              run_job_task:
                 job_id: ${resources.jobs.download_files.id}
                 job_parameters:
-                  month: "${input.month}"
-                  year : "${input.year}"
-                  raw_path: "${input.raw_path}"
-            
+                  month: "{{input.month}}"
+                  year: "{{input.year}}"
+                  base_url: ${var.base_url}
+                  raw_path: ${var.raw_path}
 
-      
     etl_job:
       name: etl_job
       trigger:

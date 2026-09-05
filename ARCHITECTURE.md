@@ -1,92 +1,149 @@
-# YG-Pipeline v2: NYC Taxi Lakehouse on Databricks
+# NYC Taxi Lakehouse on Databricks
 
-## Overview
+## Purpose
 
-This project is a migration and rebuild of **YG-Pipeline**, my first end-to-end
-data pipeline, originally built outside Databricks. The goal here is not to
-reinvent the use case — it still runs on the **NYC Taxi dataset** — but to
-rebuild it natively on the **Databricks platform** (free trial account) as a
-hands-on way to learn the lakehouse ecosystem: Auto Loader, Delta Lake,
-medallion architecture, Unity Catalog, and native Spark transformations.
+This project migrates the YG-Pipeline NYC Taxi workload from an on-premises platform based on ClickHouse, Spark, Docker, and Terraform to Databricks. The current implementation focuses on reliable ingestion, data quality, medallion storage, orchestration, and Gold-layer analytics.
 
-The project is scoped intentionally small so the focus stays on learning the
-platform mechanics rather than data modeling complexity.
+The repository is intentionally small. It demonstrates the lakehouse design and deployment workflow without claiming to be a production-scale fleet dispatch platform.
 
----
+## Current Architecture
 
-## Architecture
+```mermaid
+flowchart LR
+    Source["NYC Green Taxi Parquet\nTLC zone lookup"] --> Volume["Unity Catalog Volume\nnyc_taxi.bronze.raw_data"]
+    Volume --> AutoLoader["Auto Loader\navailableNow + checkpoints"]
+    AutoLoader --> Bronze["Bronze Delta\nnyc_taxi.bronze"]
+    Bronze --> Quality["Quality and quarantine\nduplicate IDs + zero miles"]
+    Quality --> Silver["Silver Delta\nnyc_taxi.silver.green_taxi"]
+    Silver --> Gold["Gold SQL objects\nnyc_taxi.gold"]
+    Gold --> Consumers["SQL analysis\nfuture dashboards"]
+    Quarantine["nyc_taxi.quarantine"] -. retains rejected rows .-> Quality
+    Catalog["Unity Catalog"] -. governs .-> Bronze
+    Catalog -. governs .-> Silver
+    Catalog -. governs .-> Gold
+```
 
-### 1. Ingestion Layer
+### Implemented components
 
-Two ingestion modes, each suited to a different scenario rather than one
-being a "backup" for the other:
+- **Unity Catalog Volume:** stores downloaded source Parquet files and Auto Loader metadata.
+- **Auto Loader:** ingests new files incrementally into Bronze Delta tables.
+- **Spark notebooks:** standardize types, derive trip features, apply quality rules, and publish Silver data.
+- **Quarantine notebooks:** preserve duplicate business keys and zero-distance records for investigation.
+- **Databricks SQL tasks:** build Gold dimensions, trip summary, and borough performance metrics.
+- **Databricks Asset Bundles:** define deployment targets and job workflows in `databricks.yml` and `resources/`.
 
-- **Auto Loader (streaming/incremental)**
-  A job simulates an event producer, dropping files into a Databricks-managed
-  volume. A second pipeline is triggered by Auto Loader on file arrival,
-  handling the continuous incremental load with checkpointing.
-- **COPY INTO (batch/backfill)**
-  A scheduled job using the same source but triggered manually or on a
-  schedule, controlled by a parameter that forces batch-only processing.
-  Used for backfills and reconciliation runs — e.g., catching any records
-  Auto Loader's checkpoint might have missed — rather than as a redundant
-  safety net.
+## Ingestion Architecture
 
-### 2. Transformation Layer — Spark
+The project has two complementary ingestion workflows.
 
-Originally planned with dbt, transformations were moved to  **Spark**
-after learning about **Adaptive Query Execution (AQE)** and how Databricks
-optimizes Spark execution specifically. This was a deliberate shift to get
-closer to the engine and understand query optimization directly, rather than
-through an abstraction layer.
+### Targeted download
 
-*(Note: dbt and Spark aren't mutually exclusive on Databricks — `dbt-databricks`
-compiles dbt models down to Spark SQL. Native Spark is a choice for this
-project's learning goals, not a platform limitation.)*
+`download_files` accepts `month`, `year`, `base_url`, and `raw_path` job parameters. It checks whether the requested file already exists in the Volume and downloads it only when needed.
 
-### 3. Storage Layer
+### Historical backfill
 
-- **Medallion architecture** (Bronze → Silver → Gold)
-- **Delta Lake** as the table format throughout
+`backfill_download` uses a `for_each_task` with month/year objects for every month from 2020 through 2026. Each iteration invokes `download_files` with its own period. This creates a repeatable backfill without duplicating download logic.
 
-These are the two core Databricks technologies driving the whole migration,
-so they're used as the default and only storage solution — no
-parquet-only or external storage paths.
+### Incremental ingestion
 
-### 4. Consumption Layer
+`etl_job` watches the raw Volume for file arrival. Its ingestion notebook uses Auto Loader with `availableNow=True`, schema evolution, and checkpoint paths in the Volume. This processes all currently available files and terminates, which is appropriate for scheduled or file-arrival-triggered workloads.
 
-Two consumption endpoints:
+This is not a `COPY INTO` implementation. The backfill job downloads source files, while Auto Loader performs the table ingestion.
 
-- **Databricks Dashboards** — for exploratory and operational reporting
-  (trip volumes, revenue trends, zone-level activity, etc.)
-- **ML (Databricks ML / MLflow)** — target use case: **trip duration and
-  fare prediction**, using pickup/dropoff zones, time-of-day, and trip
-  distance as core features. (Alternative directions considered: demand
-  forecasting by zone/hour, or anomaly detection on fares/GPS outliers —
-  may revisit later.)
+## Transformation Architecture
 
-### 5. Governance & Observability Layer
+```mermaid
+flowchart TD
+    B["Bronze green_taxi"] --> D["Duplicate detection"]
+    B --> Z["Zero-distance quarantine"]
+    D --> Q["Quarantine duplicates"]
+    Z --> QZ["Quarantine zero-mile trips"]
+    D --> T["Spark type casting and feature derivation"]
+    Q --> T
+    QZ --> T
+    T --> S["Silver green_taxi"]
+    S --> DZ["Gold dim_zone"]
+    S --> DD["Gold dim_date"]
+    DZ --> TS["Gold trip_summary"]
+    DD --> TS
+    S --> TS
+    TS --> BM["Gold daily_borough_metrics"]
+```
 
-- **Unity Catalog** — governance: access control, data lineage, and
-  discovery across all layers.
-- **System tables / Lakehouse Monitoring** — observability: job run
-  history, pipeline health, and data quality checks. Unity Catalog alone
-  covers governance, not full observability, so this layer is paired with
-  it rather than replaced by it.
+### Bronze
 
----
+Bronze preserves the source-oriented Green Taxi and zone lookup data. It is the replay and traceability layer and should not be treated as a clean analytics contract.
 
-## Goals of the Project
+### Silver
 
-- Learn the Databricks ecosystem hands-on using a real-world dataset
-- Understand incremental vs. batch ingestion trade-offs
-- Get comfortable with Spark's optimizer (AQE) instead of relying on dbt
-- Practice medallion-architecture design with Delta Lake
-- Build a small ML use case on top of a clean gold layer
-- Apply Unity Catalog governance and basic observability practices
+`nyc_taxi.silver.green_taxi` casts source types, normalizes categorical values, derives `trip_id`, duration, fare-per-mile, tip percentage, and time features, then filters invalid analytical records. Duplicate `trip_id` values, negative monetary records, invalid timestamps, zero-distance trips, and trips over 24 hours are excluded from the analytical Silver output. Relevant rejected rows are retained in quarantine.
 
-## Out of Scope (for now)
+### Gold
 
-- Multi-cloud or production-grade deployment
-- Real-time streaming beyond the simulated producer
-- Advanced ML (this is a first pass — a single baseline model is enough)
+The SQL layer creates:
+
+- `nyc_taxi.gold.dim_zone`: zone, borough, region, and zone-type attributes.
+- `nyc_taxi.gold.dim_date`: calendar and holiday attributes for 2020–2026.
+- `nyc_taxi.gold.trip_summary`: an enriched trip-level view joining Silver to both dimensions.
+- `nyc_taxi.gold.daily_borough_metrics`: daily borough-level KPIs such as trips, revenue, tips, duration, distance, and anomaly count.
+
+## Job Orchestration
+
+```mermaid
+flowchart TD
+    Setup["setup"] --> Collect["collect_file"]
+    Collect --> Test["test_ingestion"]
+    Collect --> Dupes["quarantine_duplicate_ids"]
+    Collect --> Zero["quarantine_zero_miles"]
+    Test --> Silver["bronze_to_silver_transformation"]
+    Dupes --> Silver
+    Zero --> Silver
+    Silver --> Zone["dim_zone"]
+    Silver --> Date["dim_date"]
+    Zone --> Summary["trip_summary"]
+    Date --> Summary
+    Silver --> Summary
+    Summary --> Borough["daily_borough"]
+```
+
+The ingestion test validates that raw data and Bronze data exist and that the Bronze table contains the source columns. It does not require equal total row counts because Auto Loader is incremental and Bronze can contain prior batches.
+
+## Governance and Observability
+
+Unity Catalog is the governance foundation for catalog, schema, table, Volume, and lineage boundaries. The project creates these schemas:
+
+- `nyc_taxi.bronze`
+- `nyc_taxi.silver`
+- `nyc_taxi.gold`
+- `nyc_taxi.quarantine`
+
+The current implementation provides basic data-quality outputs and job-run visibility. Role-specific views, sensitive-field masking, retention policies, system-table dashboards, and Lakehouse Monitoring remain production hardening work rather than completed features.
+
+## Migration Mapping
+
+| On-premises component | Databricks replacement |
+| --- | --- |
+| ClickHouse analytical tables | Delta tables and views in Unity Catalog |
+| Spark execution | Databricks Spark notebooks and SQL tasks |
+| Docker runtime | Databricks-managed job execution and SQL Warehouse tasks |
+| Terraform deployment | Databricks Asset Bundles |
+| Manually managed storage | Unity Catalog Volumes and schemas |
+| Custom pipeline orchestration | Databricks Jobs task dependencies and triggers |
+
+## Planned Extensions
+
+- Databricks dashboards for borough revenue and zone demand.
+- Hourly underserved/adequate/saturated zone classification.
+- For-hire vehicle ingestion and taxi-versus-FHV competitive analytics.
+- Stronger role-based access, retention, masking, and audit reporting.
+
+These extensions should consume the existing Gold contracts rather than bypass the medallion layers.
+
+## Design Goals
+
+- Keep raw data replayable and traceable.
+- Make incremental ingestion safe to rerun.
+- Quarantine questionable records instead of silently losing them.
+- Keep business-facing Gold objects stable and understandable.
+- Deploy the same workflow consistently through Databricks Asset Bundles.
+- Distinguish implemented behavior from future production capabilities.
