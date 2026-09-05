@@ -30,6 +30,7 @@ flowchart LR
 - **Spark notebooks:** standardize types, derive trip features, apply quality rules, and publish Silver data.
 - **Quarantine notebooks:** preserve duplicate business keys, zero-distance, and reversed/refund records for investigation.
 - **Cleanup and quality checks:** remove quarantined duplicate IDs from Silver and report inferred-value counts before Gold publication.
+- **Numerical outlier policy:** quarantine extreme distances, durations, fares, tips, tolls, passenger counts, and negative monetary values with explicit reasons.
 - **Databricks SQL tasks:** build Gold dimensions, trip summary, and borough performance metrics.
 - **Databricks Asset Bundles:** define deployment targets and job workflows in `databricks.yml` and `resources/`.
 
@@ -78,6 +79,8 @@ Bronze preserves the source-oriented Green Taxi and zone lookup data. It is the 
 ### Silver
 
 `nyc_taxi.silver.green_taxi` casts source types, normalizes categorical values, derives `trip_id`, duration, fare-per-mile, tip percentage, and time features, then filters invalid analytical records. Duplicate `trip_id` values, invalid timestamps, zero-distance trips, and trips over 24 hours are excluded from the analytical Silver output. Negative monetary records are flagged as reversed and written to quarantine before exclusion. Imputation flags record when passenger, payment, or rate-code values were inferred; invalid rate codes map to `0` (`Unknown`).
+
+Numerical outliers are written to `nyc_taxi.quarantine.taxi_numerical_outliers_latest` with an `outlier_reason` value before exclusion.
 
 ### Gold
 

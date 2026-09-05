@@ -208,7 +208,7 @@ published columns are:
 | Payment and fare | `rate_code_id`, `payment_type`, `tip_amount`, `tip_percentage`, `fare_amount`, `extra`, `mta_tax`, `improvement_surcharge`, `tolls_amount`, `total_amount` |
 | Source attributes | `store_and_fwd_flag`, `trip_type` |
 | Time features | `pickup_hour`, `pickup_day_of_week` |
-| Quality | `anomaly_flag` |
+| Quality | `anomaly_flag`, `outlier_reason`, `is_reversed` |
 
 Silver rules remove invalid timestamps, zero-distance trips, trips longer than
 24 hours, and repeated `trip_id` business keys from the analytical table.
@@ -217,6 +217,12 @@ Negative fare/total records are marked with `is_reversed` and written to
 records `passenger_count_was_imputed`, `payment_type_was_imputed`, and
 `rate_code_was_imputed` so inferred values are auditable. Invalid rate codes
 use `0`, which is labeled `Unknown`.
+
+Numerical outliers are excluded from Silver and written to
+`nyc_taxi.quarantine.taxi_numerical_outliers_latest`. The current policy flags
+trip distance over 100 miles, duration over 1,440 minutes, fare or total amount
+over $500, tips or tolls over $200, invalid passenger counts, and negative
+monetary values. Each quarantined row contains an `outlier_reason` string.
 
 ### Gold Schema
 
@@ -269,6 +275,8 @@ discarding them:
   `trip_distance = 0`.
 - `nyc_taxi.quarantine.taxi_reversed_latest` contains rows with negative fare
   or total amounts and the `is_reversed` flag.
+- `nyc_taxi.quarantine.taxi_numerical_outliers_latest` contains numerical
+  outliers and their `outlier_reason` values.
 - Timestamped copies are also written for each run, using names such as
   `taxi_trips_duplicates_<timestamp>` and `taxi_zero_miles_<timestamp>`.
 
