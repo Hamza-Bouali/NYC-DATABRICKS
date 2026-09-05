@@ -81,7 +81,11 @@ reference data:
 - Raw Parquet files arrive in a Unity Catalog Volume.
 - Auto Loader incrementally ingests records into the Bronze layer ( triggered by file arrival).
 - Spark notebooks standardize types, derive trip metrics, filter invalid rows,
-  and quarantine duplicates and zero-distance trips.
+  and quarantine duplicates, zero-distance, and reversed/refund records.
+- Cleanup and quality-check notebooks run before Gold publication and report
+  inferred-value counts for auditability.
+- The zone lookup is downloaded and materialized through one canonical Bronze
+  path before the Gold zone dimension is built.
 - SQL tasks build Gold dimensions and the trip summary and borough metrics.
 - Databricks Asset Bundles deploy and orchestrate the jobs.
 
@@ -206,9 +210,13 @@ published columns are:
 | Time features | `pickup_hour`, `pickup_day_of_week` |
 | Quality | `anomaly_flag` |
 
-Silver rules remove invalid timestamps, negative monetary values, zero-distance
-trips, trips longer than 24 hours, and repeated `trip_id` business keys from
-the analytical table. Removed records remain available in quarantine.
+Silver rules remove invalid timestamps, zero-distance trips, trips longer than
+24 hours, and repeated `trip_id` business keys from the analytical table.
+Negative fare/total records are marked with `is_reversed` and written to
+`nyc_taxi.quarantine.taxi_reversed_latest` before exclusion. The contract also
+records `passenger_count_was_imputed`, `payment_type_was_imputed`, and
+`rate_code_was_imputed` so inferred values are auditable. Invalid rate codes
+use `0`, which is labeled `Unknown`.
 
 ### Gold Schema
 
@@ -259,6 +267,8 @@ discarding them:
   the duplicate business key and includes the derived `trip_id`.
 - `nyc_taxi.quarantine.taxi_zero_miles_latest` contains Bronze rows where
   `trip_distance = 0`.
+- `nyc_taxi.quarantine.taxi_reversed_latest` contains rows with negative fare
+  or total amounts and the `is_reversed` flag.
 - Timestamped copies are also written for each run, using names such as
   `taxi_trips_duplicates_<timestamp>` and `taxi_zero_miles_<timestamp>`.
 

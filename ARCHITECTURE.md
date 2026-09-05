@@ -28,7 +28,8 @@ flowchart LR
 - **Unity Catalog Volume:** stores downloaded source Parquet files and Auto Loader metadata.
 - **Auto Loader:** ingests new files incrementally into Bronze Delta tables.
 - **Spark notebooks:** standardize types, derive trip features, apply quality rules, and publish Silver data.
-- **Quarantine notebooks:** preserve duplicate business keys and zero-distance records for investigation.
+- **Quarantine notebooks:** preserve duplicate business keys, zero-distance, and reversed/refund records for investigation.
+- **Cleanup and quality checks:** remove quarantined duplicate IDs from Silver and report inferred-value counts before Gold publication.
 - **Databricks SQL tasks:** build Gold dimensions, trip summary, and borough performance metrics.
 - **Databricks Asset Bundles:** define deployment targets and job workflows in `databricks.yml` and `resources/`.
 
@@ -76,7 +77,7 @@ Bronze preserves the source-oriented Green Taxi and zone lookup data. It is the 
 
 ### Silver
 
-`nyc_taxi.silver.green_taxi` casts source types, normalizes categorical values, derives `trip_id`, duration, fare-per-mile, tip percentage, and time features, then filters invalid analytical records. Duplicate `trip_id` values, negative monetary records, invalid timestamps, zero-distance trips, and trips over 24 hours are excluded from the analytical Silver output. Relevant rejected rows are retained in quarantine.
+`nyc_taxi.silver.green_taxi` casts source types, normalizes categorical values, derives `trip_id`, duration, fare-per-mile, tip percentage, and time features, then filters invalid analytical records. Duplicate `trip_id` values, invalid timestamps, zero-distance trips, and trips over 24 hours are excluded from the analytical Silver output. Negative monetary records are flagged as reversed and written to quarantine before exclusion. Imputation flags record when passenger, payment, or rate-code values were inferred; invalid rate codes map to `0` (`Unknown`).
 
 ### Gold
 
@@ -95,14 +96,17 @@ flowchart TD
     Collect --> Test["test_ingestion"]
     Collect --> Dupes["quarantine_duplicate_ids"]
     Collect --> Zero["quarantine_zero_miles"]
+    Collect --> Lookup["augment_zone_lookup"]
     Test --> Silver["bronze_to_silver_transformation"]
     Dupes --> Silver
     Zero --> Silver
-    Silver --> Zone["dim_zone"]
-    Silver --> Date["dim_date"]
+    Silver --> Clean["clean_quarantined_duplicates"]
+    Clean --> Quality["quality_check"]
+    Lookup --> Zone["dim_zone"]
+    Quality --> Date["dim_date"]
     Zone --> Summary["trip_summary"]
     Date --> Summary
-    Silver --> Summary
+    Quality --> Summary
     Summary --> Borough["daily_borough"]
 ```
 

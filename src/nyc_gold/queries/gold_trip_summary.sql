@@ -62,6 +62,7 @@ SELECT
 
   s.rate_code_id,
   CASE s.rate_code_id
+    WHEN 0 THEN 'Unknown'
     WHEN 1 THEN 'Standard rate'
     WHEN 2 THEN 'JFK'
     WHEN 3 THEN 'Newark'

@@ -149,7 +149,7 @@ duplication_check as (
     round(count(*) * 100.0 / (select count(*) from zero_dist), 2) as pct_of_all_trips,
     'Minimal duplication found' as interpretation
   from zero_dist z
-  inner join nyc_taxi.quranatine.taxi_trips_duplicates_2026_08_26_18_21_for_lpep_pickup_datetime_lpep_dropoff_datetime_pulocationid_dolocationid dup
+  inner join nyc_taxi.quarantine.taxi_trips_duplicates_latest dup
     on z.pickup_datetime = dup.lpep_pickup_datetime
     and z.dropoff_datetime = dup.lpep_dropoff_datetime
     and z.PULocationID = dup.PULocationID
@@ -164,7 +164,7 @@ duplication_check as (
     100.00,
     '100% of duplicates are no-charge trips'
   from zero_dist z
-  inner join nyc_taxi.quranatine.taxi_trips_duplicates_2026_08_26_18_21_for_lpep_pickup_datetime_lpep_dropoff_datetime_pulocationid_dolocationid dup
+  inner join nyc_taxi.quarantine.taxi_trips_duplicates_latest dup
     on z.pickup_datetime = dup.lpep_pickup_datetime
     and z.dropoff_datetime = dup.lpep_dropoff_datetime
     and z.PULocationID = dup.PULocationID
