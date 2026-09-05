@@ -63,5 +63,25 @@ resources:
             notebook_path: ../src/nyc_silver/transform.ipynb
           depends_on:
             - task_key: collect_file
+        - task_key: dim_zone
+          sql_task: 
+            warehouse_id: b253792144566b85
+            file: 
+              path: ../src/nyc_gold/queries/gold_dim_zone.sql
+        - task_key: daily_borough
+          sql_task:
+            warehouse_id: b253792144566b85
+            file: 
+              path: ../src/nyc_gold/queries/gold_daily_borough_metrics.sql
 
-
+        - task_key: dim_date
+          sql_task:
+            warehouse_id: b253792144566b85
+            file: 
+              path: ../src/nyc_gold/queries/gold_dim_date.sql
+        
+        - task_key: trip_summary
+          sql_task:
+            warehouse_id: b253792144566b85
+            file: 
+              path: ../src/nyc_gold/queries/gold_trip_summary.sql
