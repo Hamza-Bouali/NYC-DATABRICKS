@@ -1,0 +1,14 @@
+resources:
+  dashboards:
+    Fleet_Operations:
+      display_name: "Fleet Operations"
+      warehouse_id: ${var.warehouse_id}
+      file_path: ../src/dashboards/fleet_operations.lvdash.json
+    Financial_Performance:
+      display_name: "Financial Performance"
+      warehouse_id: ${var.warehouse_id}
+      file_path: ../src/dashboards/financial_performance.lvdash.json
+    Compliance_Quality:
+      display_name: "Compliance & Quality"
+      warehouse_id: ${var.warehouse_id}
+      file_path: ../src/dashboards/compliance_quality.lvdash.json

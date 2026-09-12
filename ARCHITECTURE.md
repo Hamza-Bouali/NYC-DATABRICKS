@@ -16,7 +16,7 @@ flowchart LR
     Bronze --> Quality["Quality and quarantine\nduplicate IDs + zero miles"]
     Quality --> Silver["Silver Delta\nnyc_taxi.silver.green_taxi"]
     Silver --> Gold["Gold SQL objects\nnyc_taxi.gold"]
-    Gold --> Consumers["SQL analysis\nfuture dashboards"]
+    Gold --> Consumers["SQL analysis\nthree client dashboards"]
     Quarantine["nyc_taxi.quarantine"] -. retains rejected rows .-> Quality
     Catalog["Unity Catalog"] -. governs .-> Bronze
     Catalog -. governs .-> Silver
@@ -56,10 +56,11 @@ This is not a `COPY INTO` implementation. The backfill job downloads source file
 
 ```mermaid
 flowchart TD
-    B["Bronze green_taxi"] --> D["Duplicate detection"]
+    B["Bronze green_taxi"] --> D["Duplicate and outlier detection"]
     B --> Z["Zero-distance quarantine"]
     D --> Q["Quarantine duplicates"]
     Z --> QZ["Quarantine zero-mile trips"]
+    D --> QO["Quarantine numerical outliers"]
     D --> T["Spark type casting and feature derivation"]
     Q --> T
     QZ --> T

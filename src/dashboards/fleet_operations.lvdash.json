@@ -1,0 +1,62 @@
+{
+  "datasets": [
+    {
+      "name": "ds_demand_heatmap",
+      "displayName": "Hourly demand",
+      "queryLines": ["WITH bounds AS (SELECT MAX(trip_date) AS latest_date FROM nyc_taxi.gold.trip_summary) SELECT pickup_hour, pickup_borough, COUNT(*) AS trip_count, ROUND(AVG(total_amount), 2) AS avg_fare FROM nyc_taxi.gold.trip_summary CROSS JOIN bounds WHERE trip_date BETWEEN latest_date - INTERVAL 6 DAYS AND latest_date GROUP BY pickup_hour, pickup_borough ORDER BY pickup_hour, pickup_borough"]
+    },
+    {
+      "name": "ds_underserved_zones",
+      "displayName": "Underserved zones",
+      "queryLines": ["WITH bounds AS (SELECT MAX(trip_date) AS latest_date FROM nyc_taxi.gold.trip_summary) SELECT pickup_borough, pickup_zone, COUNT(*) AS trips_latest_day FROM nyc_taxi.gold.trip_summary CROSS JOIN bounds WHERE trip_date = latest_date GROUP BY pickup_borough, pickup_zone HAVING COUNT(*) < 50 ORDER BY trips_latest_day ASC LIMIT 10"]
+    },
+    {
+      "name": "ds_saturation",
+      "displayName": "Zone saturation",
+      "queryLines": ["WITH bounds AS (SELECT MAX(trip_date) AS latest_date FROM nyc_taxi.gold.trip_summary) SELECT trip_date, pickup_borough, COUNT(DISTINCT pickup_zone) AS zones_active, SUM(CASE WHEN trip_count_per_zone > 200 THEN 1 ELSE 0 END) AS saturated_zones FROM (SELECT trip_date, pickup_borough, pickup_zone, COUNT(*) AS trip_count_per_zone FROM nyc_taxi.gold.trip_summary CROSS JOIN bounds WHERE trip_date BETWEEN latest_date - INTERVAL 13 DAYS AND latest_date GROUP BY trip_date, pickup_borough, pickup_zone) zone_counts GROUP BY trip_date, pickup_borough ORDER BY trip_date DESC, pickup_borough"]
+    }
+  ],
+  "pages": [
+    {
+      "name": "fleet_operations",
+      "displayName": "Fleet Operations",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layout": [
+        {
+          "widget": {
+            "name": "fleet_header",
+            "multilineTextboxSpec": {
+              "lines": ["# Fleet Operations\nUse the latest available 7-14 days of demand and saturation signals to redirect vehicles toward underserved zones."]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "demand_heatmap",
+            "queries": [{"name": "main_query", "query": {"datasetName": "ds_demand_heatmap", "fields": [{"name": "pickup_hour", "expression": "`pickup_hour`"}, {"name": "pickup_borough", "expression": "`pickup_borough`"}, {"name": "trip_count", "expression": "`trip_count`"}, {"name": "avg_fare", "expression": "`avg_fare`"}], "disaggregated": true}}],
+            "spec": {"version": 3, "widgetType": "heatmap", "encodings": {"x": {"fieldName": "pickup_hour", "scale": {"type": "categorical"}, "axis": {"hideTitle": true}}, "y": {"fieldName": "pickup_borough", "scale": {"type": "categorical"}, "axis": {"hideTitle": true}}, "color": {"fieldName": "trip_count", "scale": {"type": "quantitative", "colorRamp": {"mode": "scheme", "scheme": "viridis"}}}}, "frame": {"title": "Hourly demand by borough", "showTitle": true, "description": "Trip count intensity over the latest available 7 days", "showDescription": true}}
+          },
+          "position": {"x": 0, "y": 2, "width": 8, "height": 7}
+        },
+        {
+          "widget": {
+            "name": "underserved_zones",
+            "queries": [{"name": "main_query", "query": {"datasetName": "ds_underserved_zones", "fields": [{"name": "pickup_borough", "expression": "`pickup_borough`"}, {"name": "pickup_zone", "expression": "`pickup_zone`"}, {"name": "trips_latest_day", "expression": "`trips_latest_day`"}], "disaggregated": true}}],
+            "spec": {"version": 3, "widgetType": "bar", "encodings": {"x": {"fieldName": "trips_latest_day", "scale": {"type": "quantitative"}}, "y": {"fieldName": "pickup_zone", "scale": {"type": "categorical"}}, "color": {"fieldName": "pickup_borough", "scale": {"type": "categorical"}}}, "frame": {"title": "Top 10 underserved zones on latest available day", "showTitle": true}}
+          },
+          "position": {"x": 8, "y": 2, "width": 4, "height": 7}
+        },
+        {
+          "widget": {
+            "name": "saturation_timeline",
+            "queries": [{"name": "main_query", "query": {"datasetName": "ds_saturation", "fields": [{"name": "trip_date", "expression": "`trip_date`"}, {"name": "pickup_borough", "expression": "`pickup_borough`"}, {"name": "zones_active", "expression": "`zones_active`"}, {"name": "saturated_zones", "expression": "`saturated_zones`"}], "disaggregated": true}}],
+            "spec": {"version": 3, "widgetType": "area", "encodings": {"x": {"fieldName": "trip_date", "scale": {"type": "temporal"}}, "y": {"scale": {"type": "quantitative"}, "fields": [{"fieldName": "zones_active", "displayName": "Active zones"}, {"fieldName": "saturated_zones", "displayName": "Saturated zones"}]}, "color": {"fieldName": "pickup_borough", "scale": {"type": "categorical"}}}, "frame": {"title": "Zone saturation timeline", "showTitle": true}}
+          },
+          "position": {"x": 0, "y": 9, "width": 12, "height": 6}
+        }
+      ]
+    }
+  ],
+  "uiSettings": {"applyModeEnabled": false, "theme": {"canvasBackgroundColor": {"light": "#F5F7F8", "dark": "#1F272D"}, "widgetBackgroundColor": {"light": "#FFFFFF", "dark": "#11171C"}, "fontColor": {"light": "#17212B", "dark": "#E8ECF0"}, "selectionColor": {"light": "#2272B4", "dark": "#8ACAFF"}, "visualizationColors": ["#2272B4", "#F59E0B", "#0F766E", "#DC6B3F", "#7C3AED", "#4B5563"], "widgetHeaderAlignment": "LEFT"}}
+}

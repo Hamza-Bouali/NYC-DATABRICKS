@@ -56,9 +56,9 @@ revenue per trip. These metrics support daily operational and finance reviews.
 ### 3. Zone and Demand Analytics
 
 The gold layer includes zone and borough dimensions that support demand and
-revenue analysis by location. An hourly demand heatmap and underserved,
-adequate, or saturated classifications are planned next, using the same
-enriched trip foundation.
+revenue analysis by location. The published Fleet Operations dashboard uses
+this foundation for an hourly demand heatmap, underserved-zone ranking, and
+zone saturation timeline.
 
 ### 4. Service Quality and Anomaly Monitoring
 
@@ -89,9 +89,9 @@ reference data:
 - SQL tasks build Gold dimensions and the trip summary and borough metrics.
 - Databricks Asset Bundles deploy and orchestrate the jobs.
 
-FHV ingestion, dashboards, automated role-specific views, retention policies,
-and query-level audit reporting are documented target capabilities rather than
-completed features in this repository.
+FHV ingestion, automated role-specific views, retention policies, and
+query-level audit reporting remain target capabilities rather than completed
+features. The three client dashboards are implemented and published.
 
 ## Architecture and Data Flow
 
@@ -277,8 +277,9 @@ discarding them:
   or total amounts and the `is_reversed` flag.
 - `nyc_taxi.quarantine.taxi_numerical_outliers_latest` contains numerical
   outliers and their `outlier_reason` values.
-- Timestamped copies are also written for each run, using names such as
-  `taxi_trips_duplicates_<timestamp>` and `taxi_zero_miles_<timestamp>`.
+
+These `_latest` tables are overwritten by each pipeline run and represent the
+current quarantine snapshot.
 
 ## Migration From On-Premises
 
@@ -334,6 +335,7 @@ concept are target outcomes, not measured results from the current repository.
 - `tests/`: Local test configuration.
 - `fixtures/`: Test data fixtures.
 - `ARCHITECTURE.md`: Detailed technical architecture notes.
+- `BUSINESS_GUIDE.md`: Stakeholder questions, dashboard interpretation, data products, and limitations.
 
 ## Getting Started
 
@@ -423,3 +425,19 @@ After downloading data, run the ETL job to ingest and transform it:
 ```bash
 databricks bundle run etl_job -t dev
 ```
+
+## Client Dashboards
+
+The project includes three published Databricks AI/BI dashboards backed by
+`nyc_taxi.gold.trip_summary`:
+
+| Dashboard | Consumer | Key metrics | Published dashboard ID |
+| --- | --- | --- | --- |
+| Fleet Operations | Fleet managers and dispatchers | Hourly demand heatmap, underserved zones, saturation timeline | `01f1ae0363261f579f1db84dd7cdd2ca` |
+| Financial Performance | Finance analysts and executives | Daily borough revenue, revenue per trip, fare anomaly alerts | `01f1ae0363b41df58682d02fb2058cbb` |
+| Compliance and Quality | Compliance officers and regulators | Zone coverage, service quality, weekend/weekday service gap | `01f1ae03644a1816bd78d6b64a58a384` |
+
+The dashboard definitions are versioned in `src/dashboards/`. Their SQL uses
+the Gold `trip_summary` contract and was validated against SQL Warehouse
+`b253792144566b85` before publication. Dashboard queries use the `nyc_taxi`
+catalog and `gold` schema supplied at deployment time.
