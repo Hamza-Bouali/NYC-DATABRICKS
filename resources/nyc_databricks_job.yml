@@ -1,4 +1,5 @@
 resources:
+  
   jobs:
     download_files:
       name: get_raw_data
@@ -141,13 +142,28 @@ resources:
               path: ../src/nyc_gold/queries/gold_trip_summary.sql
     
     data_consumption:
-      name: "Dashboards Refresh"
+      name: "Refresh Dashboards"
       trigger:
         table_update: 
           table_names:
             - nyc_taxi.gold.daily_borough_metrics
             - nyc_taxi.gold.trip_summary
           condition: ANY_UPDATED 
+      tasks:
+        - task_key: "Fleet_Operations"
+          dashboard_task:
+            dashboard_id: "${resources.dashboards.Fleet_Operations.id}"
+            warehouse_id: ${var.warehouse_id}
+
+        - task_key: "Financial_Performance"
+          dashboard_task:
+            dashboard_id: "${resources.dashboards.Financial_Performance.id}"
+            warehouse_id: ${var.warehouse_id}
+
+        - task_key: "compliance"
+          dashboard_task:
+            dashboard_id: "${resources.dashboards.Compliance_Quality.id}"
+            warehouse_id: ${var.warehouse_id}
 
 
 

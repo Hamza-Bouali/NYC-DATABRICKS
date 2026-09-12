@@ -1,11 +1,14 @@
 bundle:
   name: NYC-DATABRICKS
   uuid: c3768229-1f64-430f-b2b1-58bcf8d5a95b
-
 include:
   - resources/*.yml
 
 variables:
+  num_workers:
+    description: "Static number of workers for all jobs in this bundle"
+    default: 1
+    type: int
   catalog:
     description: The catalog to use
 
