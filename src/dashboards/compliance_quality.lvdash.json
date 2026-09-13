@@ -1,21 +1,192 @@
 {
   "datasets": [
-    {"name": "ds_coverage_status", "displayName": "Zone coverage", "queryLines": ["WITH bounds AS (SELECT MAX(trip_date) AS latest_date FROM nyc_taxi.gold.trip_summary) SELECT pickup_borough, pickup_zone, COUNT(*) AS monthly_trips, CASE WHEN COUNT(*) < 20 THEN 'UNDERSERVED' WHEN COUNT(*) BETWEEN 50 AND 200 THEN 'ADEQUATE' ELSE 'WELL_SERVICED' END AS coverage_status FROM nyc_taxi.gold.trip_summary CROSS JOIN bounds WHERE trip_date BETWEEN latest_date - INTERVAL 29 DAYS AND latest_date  GROUP BY pickup_borough, pickup_zone ORDER BY monthly_trips ASC"]},
-    {"name": "ds_service_quality", "displayName": "Service quality", "queryLines": ["WITH bounds AS (SELECT MAX(trip_date) AS latest_date FROM nyc_taxi.gold.trip_summary) SELECT pickup_borough, ROUND(AVG(trip_duration_minutes), 2) AS avg_duration_min, ROUND(AVG(trip_distance), 2) AS avg_distance_mi, ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY trip_duration_minutes), 2) AS p95_duration_min FROM nyc_taxi.gold.trip_summary CROSS JOIN bounds WHERE trip_date BETWEEN latest_date - INTERVAL 29 DAYS AND latest_date GROUP BY pickup_borough ORDER BY avg_duration_min DESC"]},
-    {"name": "ds_service_gap", "displayName": "Service gap", "queryLines": ["WITH bounds AS (SELECT MAX(trip_date) AS latest_date FROM nyc_taxi.gold.trip_summary), coverage AS (SELECT pickup_zone, CASE WHEN COUNT(*) < 50 THEN 'UNDERSERVED' ELSE 'ADEQUATE' END AS coverage_status FROM nyc_taxi.gold.trip_summary CROSS JOIN bounds WHERE trip_date BETWEEN latest_date - INTERVAL 29 DAYS AND latest_date GROUP BY pickup_zone) SELECT is_weekend, pickup_borough, COUNT(DISTINCT pickup_zone) AS zones_with_service, AVG(CASE WHEN coverage.coverage_status = 'UNDERSERVED' THEN 1.0 ELSE 0.0 END) AS pct_underserved FROM nyc_taxi.gold.trip_summary LEFT JOIN coverage USING (pickup_zone) CROSS JOIN bounds WHERE trip_date BETWEEN latest_date - INTERVAL 29 DAYS AND latest_date GROUP BY is_weekend, pickup_borough ORDER BY is_weekend, pct_underserved DESC"]}
+    {
+      "name": "ds_zone_coverage",
+      "displayName": "Zone coverage",
+      "query": "SELECT\n  pickup_borough,\n  pickup_zone,\n  COUNT(*) AS monthly_trips,\n  CASE\n    WHEN COUNT(*) < 20 THEN 'UNDERSERVED'\n    WHEN COUNT(*) BETWEEN 50 AND 200 THEN 'ADEQUATE'\n    ELSE 'WELL_SERVICED'\n  END AS coverage_status\nFROM nyc_taxi.gold.trip_summary\nWHERE trip_date >= (SELECT MAX(trip_date) - INTERVAL 29 DAYS FROM nyc_taxi.gold.trip_summary)\nGROUP BY pickup_borough, pickup_zone\nORDER BY monthly_trips ASC"
+    },
+    {
+      "name": "ds_service_quality",
+      "displayName": "Service quality",
+      "query": "SELECT\n  pickup_borough,\n  ROUND(AVG(trip_duration_minutes), 2) AS avg_duration_min,\n  ROUND(AVG(trip_distance), 2) AS avg_distance_mi,\n  ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY trip_duration_minutes), 2) AS p95_duration_min\nFROM nyc_taxi.gold.trip_summary\nWHERE trip_date >= (SELECT MAX(trip_date) - INTERVAL 29 DAYS FROM nyc_taxi.gold.trip_summary)\nGROUP BY pickup_borough\nORDER BY avg_duration_min DESC"
+    },
+    {
+      "name": "ds_service_gap",
+      "displayName": "Service gap",
+      "query": "WITH coverage AS (\n  SELECT\n    pickup_zone,\n    CASE WHEN COUNT(*) < 50 THEN 'UNDERSERVED' ELSE 'ADEQUATE' END AS coverage_status\n  FROM nyc_taxi.gold.trip_summary\n  WHERE trip_date >= (SELECT MAX(trip_date) - INTERVAL 29 DAYS FROM nyc_taxi.gold.trip_summary)\n  GROUP BY pickup_zone\n)\nSELECT\n  t.is_weekend,\n  t.pickup_borough,\n  COUNT(DISTINCT t.pickup_zone) AS zones_with_service,\n  AVG(CASE WHEN c.coverage_status = 'UNDERSERVED' THEN 1.0 ELSE 0.0 END) AS pct_underserved\nFROM nyc_taxi.gold.trip_summary t\nLEFT JOIN coverage c USING (pickup_zone)\nWHERE t.trip_date >= (SELECT MAX(trip_date) - INTERVAL 29 DAYS FROM nyc_taxi.gold.trip_summary)\nGROUP BY t.is_weekend, t.pickup_borough\nORDER BY t.is_weekend, pct_underserved DESC"
+    }
   ],
   "pages": [
     {
       "name": "compliance_quality",
       "displayName": "Compliance and Quality",
-      "pageType": "PAGE_TYPE_CANVAS",
       "layout": [
-        {"widget": {"name": "compliance_header", "multilineTextboxSpec": {"lines": ["# Compliance and Quality\nMonitor zone coverage, service quality, and recurring service gaps for compliance reviews."]}}, "position": {"x": 0, "y": 0, "width": 12, "height": 2}},
-        {"widget": {"name": "coverage_status", "queries": [{"name": "main_query", "query": {"datasetName": "ds_coverage_status", "fields": [{"name": "pickup_borough", "expression": "`pickup_borough`"}, {"name": "pickup_zone", "expression": "`pickup_zone`"}, {"name": "monthly_trips", "expression": "`monthly_trips`"}, {"name": "coverage_status", "expression": "`coverage_status`"}], "disaggregated": true}}], "spec": {"version": 3, "widgetType": "pie", "encodings": {"angle": {"fieldName": "monthly_trips", "scale": {"type": "quantitative"}}, "color": {"fieldName": "coverage_status", "scale": {"type": "categorical", "mappings": [{"value": "UNDERSERVED", "color": "#DC6B3F"}, {"value": "ADEQUATE", "color": "#F59E0B"}, {"value": "WELL_SERVICED", "color": "#0F766E"}]}}, "label": {"show": true}}, "frame": {"title": "Zone coverage status", "showTitle": true}}}, "position": {"x": 0, "y": 2, "width": 5, "height": 6}},
-        {"widget": {"name": "service_quality", "queries": [{"name": "main_query", "query": {"datasetName": "ds_service_quality", "fields": [{"name": "pickup_borough", "expression": "`pickup_borough`"}, {"name": "avg_duration_min", "expression": "`avg_duration_min`"}, {"name": "avg_distance_mi", "expression": "`avg_distance_mi`"}, {"name": "p95_duration_min", "expression": "`p95_duration_min`"}], "disaggregated": true}}], "spec": {"version": 3, "widgetType": "bar", "encodings": {"x": {"fieldName": "avg_duration_min", "scale": {"type": "quantitative"}}, "y": {"fieldName": "pickup_borough", "scale": {"type": "categorical"}}, "color": {"fieldName": "p95_duration_min", "scale": {"type": "quantitative"}}}, "frame": {"title": "Service quality by borough", "showTitle": true, "description": "Average trip duration with p95 duration available for comparison", "showDescription": true}}}, "position": {"x": 5, "y": 2, "width": 7, "height": 6}},
-        {"widget": {"name": "service_gap", "queries": [{"name": "main_query", "query": {"datasetName": "ds_service_gap", "fields": [{"name": "is_weekend", "expression": "`is_weekend`"}, {"name": "pickup_borough", "expression": "`pickup_borough`"}, {"name": "zones_with_service", "expression": "`zones_with_service`"}, {"name": "pct_underserved", "expression": "`pct_underserved`"}], "disaggregated": true}}], "spec": {"version": 3, "widgetType": "bar", "encodings": {"x": {"fieldName": "pickup_borough", "scale": {"type": "categorical"}}, "y": {"fieldName": "pct_underserved", "scale": {"type": "quantitative", "format": {"type": "number-percent"}}}, "color": {"fieldName": "is_weekend", "scale": {"type": "categorical"}}}, "frame": {"title": "Weekend versus weekday service gap", "showTitle": true}}}, "position": {"x": 0, "y": 8, "width": 12, "height": 6}}
+        {
+          "widget": {
+            "name": "text_header",
+            "textbox_spec": "# Fleet Operations\n\nUse the latest available 7-14 days of demand and saturation signals to redirect vehicles toward underserved zones."
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "coverage_pie",
+            "displayName": "",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_zone_coverage",
+                  "fields": [
+                    {"name": "pickup_borough", "expression": "`pickup_borough`"},
+                    {"name": "pickup_zone", "expression": "`pickup_zone`"},
+                    {"name": "monthly_trips", "expression": "`monthly_trips`"},
+                    {"name": "coverage_status", "expression": "`coverage_status`"}
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "angle": {
+                  "fieldName": "monthly_trips",
+                  "scale": {"type": "quantitative"}
+                },
+                "color": {
+                  "fieldName": "coverage_status",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {"value": "UNDERSERVED", "color": "#DC6B3F"},
+                      {"value": "ADEQUATE", "color": "#F59E0B"},
+                      {"value": "WELL_SERVICED", "color": "#0F766E"}
+                    ]
+                  }
+                },
+                "label": {"show": true}
+              },
+              "frame": {
+                "title": "Zone coverage status",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 3,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "quality_bar",
+            "displayName": "",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_service_quality",
+                  "fields": [
+                    {"name": "pickup_borough", "expression": "`pickup_borough`"},
+                    {"name": "avg_duration_min", "expression": "`avg_duration_min`"},
+                    {"name": "avg_distance_mi", "expression": "`avg_distance_mi`"},
+                    {"name": "p95_duration_min", "expression": "`p95_duration_min`"}
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "avg_duration_min",
+                  "scale": {"type": "quantitative"}
+                },
+                "y": {
+                  "fieldName": "pickup_borough",
+                  "scale": {"type": "categorical"}
+                },
+                "color": {
+                  "fieldName": "p95_duration_min",
+                  "scale": {"type": "quantitative"}
+                }
+              },
+              "frame": {
+                "title": "Service quality by borough",
+                "showTitle": true,
+                "description": "Average trip duration with p95 duration available for comparison",
+                "showDescription": true
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 2,
+            "width": 3,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "service_gap_bar",
+            "displayName": "",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_service_gap",
+                  "fields": [
+                    {"name": "is_weekend", "expression": "`is_weekend`"},
+                    {"name": "pickup_borough", "expression": "`pickup_borough`"},
+                    {"name": "zones_with_service", "expression": "`zones_with_service`"},
+                    {"name": "pct_underserved", "expression": "`pct_underserved`"}
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "pickup_borough",
+                  "scale": {"type": "categorical"}
+                },
+                "y": {
+                  "fieldName": "pct_underserved",
+                  "scale": {
+                    "type": "quantitative",
+                    "format": {"type": "number-percent"}
+                  }
+                },
+                "color": {
+                  "fieldName": "is_weekend",
+                  "scale": {"type": "categorical"}
+                }
+              },
+              "frame": {
+                "title": "Weekend versus weekday service gap",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 6,
+            "height": 4
+          }
+        }
       ]
     }
-  ],
-  "uiSettings": {"applyModeEnabled": false, "theme": {"canvasBackgroundColor": {"light": "#F5F7F8", "dark": "#1F272D"}, "widgetBackgroundColor": {"light": "#FFFFFF", "dark": "#11171C"}, "fontColor": {"light": "#17212B", "dark": "#E8ECF0"}, "selectionColor": {"light": "#2272B4", "dark": "#8ACAFF"}, "visualizationColors": ["#0F766E", "#F59E0B", "#DC6B3F", "#2272B4", "#7C3AED", "#4B5563"], "widgetHeaderAlignment": "LEFT"}}
+  ]
 }

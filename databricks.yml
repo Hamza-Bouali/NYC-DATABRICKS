@@ -8,7 +8,6 @@ variables:
   num_workers:
     description: "Static number of workers for all jobs in this bundle"
     default: 1
-    type: int
   catalog:
     description: The catalog to use
 
