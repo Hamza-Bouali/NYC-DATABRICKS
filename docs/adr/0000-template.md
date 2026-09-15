@@ -46,11 +46,7 @@ later reversed is often more useful in an interview than one that wasn't.
 
 | ADR | Title | Status |
 |---|---|---|
-| [0001](0001-ingestion-auto-loader.md) | Use Auto Loader for Bronze ingestion (over COPY INTO / Lakeflow Connect) | Accepted |
-| [0002](0002-notebooks-vs-declarative-pipelines.md) | Notebook tasks in DABs vs. Lakeflow Declarative Pipelines | Proposed , needs real rationale before Accepted |
-| [0003](0003-write-strategy-per-layer.md) | Write strategy per layer (overwrite / merge / materialized view) | Accepted |
-| [0004](0004-anomaly-thresholds-duplicate-keys.md) | Anomaly thresholds and duplicate-key strategy | Proposed , needs real thresholds before Accepted |
-| [0005](0005-operational-resilience.md) | Late-arriving records, schema drift, restarts, idempotent reruns | Accepted |
+| | | |
 
 Keep this table current , an ADR folder with a stale index is worse than no
 index, since it silently tells reviewers "this hasn't been maintained."
