@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Lint + unit/integration tests. Runs on every PR and every push to main.
+  # Uses a DEV service principal via OAuth M2M so there's no ~/.databrickscfg
+  # on the runner and no profile ambiguity (the issue you hit locally with
+  # multiple profiles matching one host).
+  # ---------------------------------------------------------------------
+  test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DEV_DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DEV_DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DEV_DATABRICKS_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync dependencies
+        run: uv sync --dev
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Run tests
+        run: uv run pytest tests -v
+
+  # ---------------------------------------------------------------------
+  # Validate the bundle definition itself (catches DABs YAML errors,
+  # bad resource references, etc.) before anything gets deployed.
+  # ---------------------------------------------------------------------
+  validate-bundle:
+    name: Validate Bundle (dev)
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DEV_DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DEV_DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DEV_DATABRICKS_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+      - name: Validate
+        run: databricks bundle validate -t dev
+
+  # ---------------------------------------------------------------------
+  # Deploy to dev automatically on every PR — fast feedback loop.
+  # ---------------------------------------------------------------------
+  deploy-dev:
+    name: Deploy to dev
+    needs: validate-bundle
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DEV_DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DEV_DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DEV_DATABRICKS_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+      - name: Deploy
+        run: databricks bundle deploy -t dev
+
+  # ---------------------------------------------------------------------
+  # Deploy to prod only on push to main, gated by a GitHub Environment
+  # with required reviewers, and using a SEPARATE prod service principal
+  # so dev credentials can never touch prod resources.
+  # ---------------------------------------------------------------------
+  deploy-prod:
+    name: Deploy to prod
+    needs: validate-bundle
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.PROD_DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.PROD_DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.PROD_DATABRICKS_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+      - name: Deploy
+        run: databricks bundle deploy -t prod
