@@ -34,8 +34,11 @@ jobs:
       - name: Sync dependencies
         run: uv sync --dev
 
-      - name: Lint
+      - name: Lint (Python)
         run: uv run ruff check .
+
+      - name: Lint (SQL)
+        run: uv run sqlfluff lint --dialect sparksql .
 
       - name: Run tests
         run: uv run pytest tests -v
