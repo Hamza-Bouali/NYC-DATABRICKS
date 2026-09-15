@@ -38,7 +38,7 @@ later reversed is often more useful in an interview than one that wasn't.
 
 | ADR | Title | Status |
 |---|---|---|
-
+| | | |
 
 Keep this table current : an ADR folder with a stale index is worse than no
 index, since it silently tells reviewers "this hasn't been maintained."
